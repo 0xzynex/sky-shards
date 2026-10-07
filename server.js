@@ -7,7 +7,7 @@ const path = require("path");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC = path.join(__dirname, "public");
+const PUBLIC = fs.existsSync(path.join(__dirname, "public", "game.html")) ? path.join(__dirname, "public") : __dirname;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "scores.json");
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
