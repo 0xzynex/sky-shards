@@ -1,0 +1,16 @@
+{
+  "name": "sky-shards",
+  "version": "1.0.0",
+  "description": "Voxel race across floating islands with live ghosts and a daily leaderboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}
