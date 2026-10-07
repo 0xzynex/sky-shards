@@ -47,6 +47,11 @@ body{background:var(--night);color:var(--ink);font-family:var(--f-mono);user-sel
 #cmpText{font-size:11px;line-height:1.3;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:center}
 #cmpText b{font-family:var(--f-display);font-size:16px;color:var(--shard);font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none}
 #sneakTag{left:50%;top:calc(50% + 22px);transform:translateX(-50%);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.overlay#winScreen{background:linear-gradient(to bottom,rgba(5,7,22,.05),rgba(5,7,22,.55) 45%,rgba(5,7,22,.85))}
+#winScreen .card{max-width:1000px;grid-template-columns:minmax(0,1fr) 270px}
+#cardImg{width:100%;aspect-ratio:16/9;border-radius:4px;border:1px solid var(--panel-edge);display:block;background:#0b1030}
+#winTime{font-size:clamp(34px,6vw,48px)}
+@media (max-width:760px){ #winScreen .card{grid-template-columns:1fr} }
 .card.guide{max-width:780px;max-height:calc(100vh - 32px);overflow:auto;grid-template-columns:1fr;background:var(--panel-solid);align-self:center}
 .guide h3{margin:0;font-family:var(--f-display);font-size:20px;color:var(--shard);font-weight:600}
 .guide section{display:grid;gap:8px;align-content:start}
@@ -61,7 +66,7 @@ body{background:var(--night);color:var(--ink);font-family:var(--f-mono);user-sel
 #cross::before{left:8px;top:0;width:2px;height:18px}
 #cross::after{top:8px;left:0;height:2px;width:18px}
 
-#toast{left:50%;top:22%;transform:translateX(-50%);font-family:var(--f-display);font-size:22px;text-align:center;text-shadow:0 2px 0 rgba(0,0,0,.55);opacity:0;transition:opacity .3s;padding-inline:16px;max-width:90vw;color:var(--ink)}
+#toast{z-index:7;left:50%;top:22%;transform:translateX(-50%);font-family:var(--f-display);font-size:22px;text-align:center;text-shadow:0 2px 0 rgba(0,0,0,.55);opacity:0;transition:opacity .3s;padding-inline:16px;max-width:90vw;color:var(--ink)}
 #toast.on{opacity:1}
 #fade{position:fixed;inset:0;z-index:4;background:#05071a;opacity:0;pointer-events:none;transition:opacity .35s}
 #fade.on{opacity:1}
@@ -138,6 +143,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
   <div class="panel" id="stats">
     <div class="row">Shards <b class="shard" id="sShard">0/0</b></div>
     <div class="row">Time <b id="sTime">00:00.0</b></div>
+    <div class="row">Bats <b id="sBats">0</b></div>
     <div class="row">Sky <b class="gold" id="sDay">day</b></div>
     <button id="soundBtn" type="button">Sound: on</button>
   </div>
@@ -237,6 +243,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <li>Walk backwards with <kbd>S</kbd> and click right mouse to place a block each step. Sneaking keeps you from falling.</li>
         <li>To go up, jump and place a block under your feet while in the air.</li>
       </ol></section>
+      <section><h3>Bats</h3><ul>
+        <li>Bats circle the islands, and there are <strong>more at night</strong>.</li>
+        <li>Every few seconds one squeaks and <strong>swoops at you</strong>. A hit knocks you back and can throw you off an edge.</li>
+        <li><strong>Click a bat once</strong> to swat it. Each one gives <strong>+2 clouds</strong>.</li>
+        <li>Sneaking with <kbd>Shift</kbd> keeps your feet on the ground when a bat hits you.</li>
+      </ul></section>
       <section><h3>Leaderboard</h3><ul>
         <li>Your nickname and time go to <strong>today</strong> and <strong>all time</strong> boards when you finish.</li>
         <li>Only your best run counts. The world changes every day at <span id="resetTime">8 PM New York / 5 PM Los Angeles</span>.</li>
@@ -252,10 +264,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     <div class="col">
       <div class="eyebrow">All shards collected</div>
       <h1 id="winTime">00:00.0</h1>
+      <img id="cardImg" alt="Your result card">
       <p id="winText"></p>
       <div class="join">
         <button class="go" id="againBtn" type="button">Run again</button>
-        <a class="ghostBtn" id="shareBtn" href="#" target="_blank" rel="noopener">Share on X</a>
+        <button class="ghostBtn" id="copyBtn" type="button">Copy image</button>
+        <button class="ghostBtn" id="saveBtn" type="button">Save image</button>
+        <a class="ghostBtn" id="shareBtn" href="#" target="_blank" rel="noopener">Post on X</a>
       </div>
     </div>
     <div class="board" id="board2"></div>
@@ -267,6 +282,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 (() => {
 "use strict";
 const ONLINE = !!window.SKY_ONLINE;
+const SITE = "sky-shards-tu3l.onrender.com";
 const W = 96, H = 64, D = 96, CS = 16;
 const NCX = W / CS, NCY = H / CS, NCZ = D / CS;
 const AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAVES=5, CRYSTAL=6, CLOUD=7, MELT=8, SAND=9;
@@ -535,7 +551,12 @@ const sfx = {
   poof(){ noiseHit({f:3000,q:.4,type:"highpass",dur:.4,vol:.07,attack:.06}); },
   win(){ [523,659,784,1047,1319].forEach((f,i)=>tone(f,.7,.12,"triangle",i*.11)); },
   click(){ tone(900,.04,.05,"square"); },
-  deny(){ tone(160,.12,.08,"square"); }
+  deny(){ tone(160,.12,.08,"square"); },
+  squeak(){ tone(3300,.06,.05,"square",0,2700); tone(3700,.05,.04,"square",.09,3100); },
+  batDie(){ tone(2900,.2,.07,"square",0,800); noiseHit({f:2200,q:.6,type:"bandpass",dur:.16,vol:.3}); },
+  bump(){ noiseHit({f:280,q:.7,type:"lowpass",dur:.18,vol:.5}); tone(110,.12,.14,"sine"); },
+  launch(){ tone(500,.55,.03,"sine",0,1700); noiseHit({f:4200,q:.3,type:"highpass",dur:.55,vol:.04,attack:.06}); },
+  boom(){ noiseHit({f:420,q:.5,type:"lowpass",dur:.9,vol:.5}); noiseHit({f:3200,q:.3,type:"highpass",dur:1.3,vol:.07,when:.12,attack:.06}); }
 };
 function startWind(){
   const c = audio(); if(!c || S.wind) return;
@@ -589,6 +610,162 @@ function updateParticles(dt){
     else { pPos[i*3]=nx; pPos[i*3+1]=ny; pPos[i*3+2]=nz; }
   }
   pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+}
+
+/* ---------- fireworks ---------- */
+const FN = 1600, fPos = new Float32Array(FN*3), fCol = new Float32Array(FN*3), fBase = new Float32Array(FN*3), fVel = new Float32Array(FN*3), fLife = new Float32Array(FN), fMax = new Float32Array(FN);
+let fNext = 0; for(let i=0;i<FN;i++) fPos[i*3+1] = -9999;
+const fGeo = new THREE.BufferGeometry();
+fGeo.setAttribute("position", new THREE.BufferAttribute(fPos,3)); fGeo.setAttribute("color", new THREE.BufferAttribute(fCol,3));
+const fMat = new THREE.PointsMaterial({size:.42, vertexColors:true, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, fog:false});
+const fPoints = new THREE.Points(fGeo, fMat); fPoints.frustumCulled = false; scene.add(fPoints);
+const FW_COLORS = [[.5,1,.95],[1,.82,.48],[1,.45,.6],[.72,.6,1],[.6,1,.55]];
+const rockets = [];
+function femit(x,y,z,vx,vy,vz,c,life){
+  const i=fNext; fNext=(fNext+1)%FN;
+  fPos[i*3]=x; fPos[i*3+1]=y; fPos[i*3+2]=z; fVel[i*3]=vx; fVel[i*3+1]=vy; fVel[i*3+2]=vz;
+  fBase[i*3]=c[0]; fBase[i*3+1]=c[1]; fBase[i*3+2]=c[2]; fLife[i]=fMax[i]=life;
+}
+function launchFireworks(n){
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  for(let k=0;k<n;k++) setTimeout(()=>{
+    const side = (Math.random()-.5)*16;
+    rockets.push({x:P.x+fx*11 + fz*side, y:P.y+1, z:P.z+fz*11 - fx*side, vy:15+Math.random()*4, fuse:.75+Math.random()*.4, c:FW_COLORS[(Math.random()*FW_COLORS.length)|0], c2:FW_COLORS[(Math.random()*FW_COLORS.length)|0]});
+    sfx.launch();
+  }, k*380 + Math.random()*150);
+}
+function updateFireworks(dt){
+  for(let r=rockets.length-1;r>=0;r--){
+    const k = rockets[r]; k.y += k.vy*dt; k.vy -= 9*dt; k.fuse -= dt;
+    femit(k.x,k.y,k.z,(Math.random()-.5)*.6,-1,(Math.random()-.5)*.6,[1,.85,.6],.35);
+    if(k.fuse<=0){
+      for(let n=0;n<90;n++){ const u=Math.random()*2-1, a=Math.random()*Math.PI*2, s=Math.sqrt(1-u*u), sp=6+Math.random()*3;
+        femit(k.x,k.y,k.z, s*Math.cos(a)*sp, u*sp, s*Math.sin(a)*sp, n%3?k.c:k.c2, 1.3+Math.random()*.7); }
+      sfx.boom(); rockets.splice(r,1);
+    }
+  }
+  for(let i=0;i<FN;i++){
+    if(fLife[i]<=0) continue;
+    fLife[i]-=dt; if(fLife[i]<=0){ fPos[i*3+1]=-9999; continue; }
+    const drag = Math.max(0, 1-1.3*dt);
+    fVel[i*3]*=drag; fVel[i*3+1]=fVel[i*3+1]*drag-3*dt; fVel[i*3+2]*=drag;
+    fPos[i*3]+=fVel[i*3]*dt; fPos[i*3+1]+=fVel[i*3+1]*dt; fPos[i*3+2]+=fVel[i*3+2]*dt;
+    const a = fLife[i]/fMax[i], tw = .7+.3*Math.sin(i+fLife[i]*30);
+    fCol[i*3]=fBase[i*3]*a*tw; fCol[i*3+1]=fBase[i*3+1]*a*tw; fCol[i*3+2]=fBase[i*3+2]*a*tw;
+  }
+  fGeo.attributes.position.needsUpdate = true; fGeo.attributes.color.needsUpdate = true;
+}
+
+/* ---------- bats ---------- */
+const batMat = new THREE.MeshBasicMaterial({color:0x3b2a4a}), batWingMat = new THREE.MeshBasicMaterial({color:0x281c35});
+const batEyeMat = new THREE.MeshBasicMaterial({color:0xff4d4d, fog:false});
+const batBodyGeo = new THREE.BoxGeometry(.32,.28,.4), batWingGeo = new THREE.BoxGeometry(.5,.04,.32), batEyeGeo = new THREE.BoxGeometry(.07,.07,.02);
+const bats = []; let batsKilled = 0, batSpawnT = 0, shake = 0;
+function makeBat(x,y,z){
+  const g = new THREE.Group(), body = new THREE.Mesh(batBodyGeo, batMat);
+  const wl = new THREE.Group(), wr = new THREE.Group();
+  const ml = new THREE.Mesh(batWingGeo, batWingMat); ml.position.x=-.25; wl.add(ml); wl.position.x=-.15;
+  const mr = new THREE.Mesh(batWingGeo, batWingMat); mr.position.x=.25; wr.add(mr); wr.position.x=.15;
+  const e1 = new THREE.Mesh(batEyeGeo, batEyeMat); e1.position.set(-.07,.04,-.205);
+  const e2 = new THREE.Mesh(batEyeGeo, batEyeMat); e2.position.set(.07,.04,-.205);
+  g.add(body, wl, wr, e1, e2); g.position.set(x,y,z); scene.add(g);
+  return {g, wl, wr, vx:0, vy:0, vz:0, tx:x, ty:y, tz:z, state:"wander", t:0, flap:Math.random()*6, retarget:0, swoopIn:5+Math.random()*6};
+}
+function batTarget(b){ const a=Math.random()*Math.PI*2, r=4+Math.random()*10; b.tx=P.x+Math.cos(a)*r; b.tz=P.z+Math.sin(a)*r; b.ty=P.y+1.5+Math.random()*4; }
+function clearBats(){ for(const b of bats) scene.remove(b.g); bats.length = 0; }
+function updateBats(dt, night){
+  const want = 3 + Math.round(night*5);
+  batSpawnT -= dt;
+  if(bats.length < want && batSpawnT <= 0){
+    batSpawnT = 2.5; const a = Math.random()*Math.PI*2;
+    const b = makeBat(P.x+Math.cos(a)*22, P.y+4+Math.random()*4, P.z+Math.sin(a)*22); batTarget(b); bats.push(b);
+  }
+  for(let i=bats.length-1;i>=0;i--){
+    const b = bats[i], p = b.g.position;
+    b.flap += dt*24; const fl = Math.sin(b.flap)*.9; b.wl.rotation.z = fl; b.wr.rotation.z = -fl;
+    let speed = 3.2;
+    if(b.state==="wander"){
+      b.retarget -= dt; b.swoopIn -= dt;
+      if(b.retarget<=0 || Math.hypot(b.tx-p.x,b.ty-p.y,b.tz-p.z)<1){ batTarget(b); b.retarget = 1.5+Math.random()*2; }
+      if(b.swoopIn<=0 && Math.hypot(P.x-p.x,P.z-p.z)<14){ b.state="swoop"; b.t=3; sfx.squeak(); }
+    } else if(b.state==="swoop"){
+      speed = 6.5; b.tx=P.x; b.ty=P.y+1.3; b.tz=P.z; b.t -= dt;
+      if(Math.hypot(P.x-p.x, P.y+1-p.y, P.z-p.z) < .95) hitByBat(b);
+      else if(b.t<=0){ b.state="wander"; b.swoopIn = 5+Math.random()*7; }
+    } else if(b.state==="flee"){
+      b.t -= dt; if(b.t<=0){ b.state="wander"; b.swoopIn = 6+Math.random()*8; batTarget(b); }
+    }
+    const dx=b.tx-p.x, dy=b.ty-p.y, dz=b.tz-p.z, d=Math.hypot(dx,dy,dz)||1, k=Math.min(1,dt*3);
+    b.vx += (dx/d*speed - b.vx)*k; b.vy += (dy/d*speed + Math.sin(b.flap*.13)*1.3 - b.vy)*k; b.vz += (dz/d*speed - b.vz)*k;
+    p.x += b.vx*dt; p.y += b.vy*dt; p.z += b.vz*dt;
+    if(get(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))){ p.y += 8*dt; b.vy = Math.abs(b.vy)+1; }
+    b.g.rotation.y = Math.atan2(-b.vx,-b.vz);
+    if(Math.hypot(p.x-P.x,p.z-P.z)>45){ scene.remove(b.g); bats.splice(i,1); }
+  }
+}
+function hitByBat(b){
+  const p=b.g.position, dx=P.x-p.x, dz=P.z-p.z, d=Math.hypot(dx,dz)||1;
+  P.vx += dx/d*7; P.vz += dz/d*7;
+  if(!keys.sneak){ P.vy = Math.max(P.vy, 4); P.ground = false; }
+  b.state="flee"; b.t=2; b.tx=p.x-dx/d*10; b.ty=p.y+5; b.tz=p.z-dz/d*10;
+  sfx.bump(); shake = .25; toast("A bat knocked you back. Click bats to swat them", "warn");
+}
+function batUnderCrosshair(){
+  const ox=P.x, oy=P.y+EYE+eyeOff, oz=P.z;
+  const dx=-Math.sin(P.yaw)*Math.cos(P.pitch), dy=Math.sin(P.pitch), dz=-Math.cos(P.yaw)*Math.cos(P.pitch);
+  const blk = raycast(); let reach = blk ? Math.hypot(blk.x+.5-ox, blk.y+.5-oy, blk.z+.5-oz)+.3 : 7;
+  let best = null;
+  for(const b of bats){ const p=b.g.position, vx=p.x-ox, vy=p.y-oy, vz=p.z-oz, t=vx*dx+vy*dy+vz*dz;
+    if(t<0 || t>Math.min(7,reach)) continue;
+    const qx=vx-dx*t, qy=vy-dy*t, qz=vz-dz*t;
+    if(qx*qx+qy*qy+qz*qz < .62*.62){ best=b; reach=t; } }
+  return best;
+}
+function killBat(b){
+  const p=b.g.position; scene.remove(b.g); bats.splice(bats.indexOf(b),1);
+  batsKilled++; inv[CLOUD]+=2; renderBar(); $("sBats").textContent = batsKilled;
+  for(let k=0;k<18;k++) emit(p.x,p.y,p.z,(Math.random()-.5)*4,Math.random()*3+1,(Math.random()-.5)*4, k%4?[.25,.17,.3]:[1,.3,.3], .5+Math.random()*.4);
+  sfx.batDie(); swing = 0; toast("Bat swatted · +2 clouds");
+}
+
+/* ---------- result card ---------- */
+const cardCanvas = document.createElement("canvas"); cardCanvas.width = 1200; cardCanvas.height = 675;
+const snapCanvas = document.createElement("canvas"); let snapWanted = false, haveSnap = false, lastRun = null;
+function takeSnap(){
+  snapCanvas.width = canvas.width; snapCanvas.height = canvas.height;
+  try{ snapCanvas.getContext("2d").drawImage(canvas,0,0); haveSnap = true; }catch(e){}
+  drawCard();
+}
+async function drawCard(){
+  if(!lastRun) return;
+  try{ await Promise.all([document.fonts.load('700 120px "Pixelify Sans"'), document.fonts.load('500 24px "IBM Plex Mono"')]); }catch(e){}
+  const c = cardCanvas.getContext("2d"), Wc = 1200, Hc = 675;
+  const DF = "'Pixelify Sans','Courier New',monospace", MF = "'IBM Plex Mono',ui-monospace,monospace";
+  c.textAlign = "left"; c.textBaseline = "alphabetic";
+  c.fillStyle = "#0b1030"; c.fillRect(0,0,Wc,Hc);
+  if(haveSnap){ const sw=snapCanvas.width, sh=snapCanvas.height, s=Math.max(Wc/sw,Hc/sh); c.drawImage(snapCanvas,(Wc-sw*s)/2,(Hc-sh*s)/2,sw*s,sh*s); }
+  const g = c.createLinearGradient(0,0,Wc,0);
+  g.addColorStop(0,"rgba(8,11,34,.93)"); g.addColorStop(.55,"rgba(8,11,34,.68)"); g.addColorStop(1,"rgba(8,11,34,.12)");
+  c.fillStyle = g; c.fillRect(0,0,Wc,Hc);
+  c.strokeStyle = "rgba(127,243,228,.55)"; c.lineWidth = 4; c.strokeRect(20,20,Wc-40,Hc-40);
+  const ls = v => { try{ c.letterSpacing = v; }catch(e){} };
+  ls("0px"); c.font = `700 56px ${DF}`; c.fillStyle = "#eef2ff"; c.fillText("Sky", 64, 116);
+  const w = c.measureText("Sky ").width; c.fillStyle = "#7ff3e4"; c.fillText("Shards", 64+w, 116);
+  ls("3px"); c.font = `500 21px ${MF}`; c.fillStyle = "#ffd27a"; c.fillText(`DAILY WORLD · ${worldDate.toUpperCase()}`, 66, 156);
+  c.fillStyle = "#9aa6d6"; c.fillText("ALL SHARDS COLLECTED IN", 66, 262);
+  ls("0px"); c.font = `700 170px ${DF}`; c.fillStyle = "#eef2ff"; c.fillText(fmt(lastRun.time), 54, 418);
+  let y = 500;
+  if(lastRun.rank){ c.font = `700 62px ${DF}`; c.fillStyle = "#ffd27a"; c.fillText(`#${lastRun.rank} today`, 62, y); y += 72; }
+  c.fillStyle = `hsl(${hueOf(lastRun.nick)},75%,62%)`; c.fillRect(66, y-24, 24, 24);
+  c.font = `600 36px ${DF}`; c.fillStyle = "#eef2ff"; c.fillText(lastRun.nick, 104, y);
+  ls("1px"); c.font = `500 21px ${MF}`; c.fillStyle = "#9aa6d6";
+  c.fillText(`${lastRun.shards}/${lastRun.total} shards · ${lastRun.falls} falls · ${lastRun.bats} bat${lastRun.bats===1?"":"s"} swatted`, 66, y+44);
+  c.textAlign = "right"; c.fillStyle = "#eef2ff"; c.font = `500 22px ${MF}`;
+  c.fillText(SITE, Wc-62, Hc-58); c.textAlign = "left"; ls("0px");
+  // pixel shard emblem
+  const ex = Wc-140, ey = 60, px = 10, shape = ["..1..",".122.","12223","12223",".123.","..3.."];
+  shape.forEach((row,r)=>[...row].forEach((ch,col)=>{ if(ch==="."){return;} c.fillStyle = ch==="1"?"#ffffff":ch==="2"?"#7ff3e4":"#9682ff"; c.fillRect(ex+col*px*2, ey+r*px*2, px*2, px*2); }));
+  $("cardImg").src = cardCanvas.toDataURL("image/png");
 }
 
 /* ---------- block cracks + outline ---------- */
@@ -688,7 +865,7 @@ function respawn(){
     P.x=safe.x; P.y=safe.y+.01; P.z=safe.z; P.vx=P.vy=P.vz=0;
     falls++; inv[CLOUD] = Math.max(0, inv[CLOUD]-4); renderBar();
     fade.classList.remove("on"); respawning = false;
-    toast("The void spat you back out. −4 clouds", "warn");
+    toast("You fell into the void. Back to your last island, −4 clouds", "warn");
   }, 380);
 }
 
@@ -880,7 +1057,7 @@ function connect(){
     if(m.t==="welcome"){ NET.id = m.id; if(m.day && m.day!==worldDay && !running){ worldDay=m.day; newGame(); } }
     else if(m.t==="players"){ renderOnline(m.list); }
     else if(m.t==="board"){ lastBoard = m.board; renderBoards(); }
-    else if(m.t==="result"){ myRank = m; showRank(); }
+    else if(m.t==="result"){ myRank = m; showRank(); if(lastRun && m.rank){ lastRun.rank = m.rank; drawCard(); updateShareLink(); } }
     else if(m.t==="error"){ toast(m.msg, "warn"); }
   };
   ws.onclose = ()=>{ NET.open=false; $("online").hidden=true; setTimeout(connect, NET.retry); NET.retry=Math.min(15000, NET.retry*1.7); };
@@ -966,13 +1143,14 @@ if(isTouch){
 }
 
 /* ---------- game flow ---------- */
-let clock = 0, dayT = .3;
+let clock = 0, dayT = .3, finished = false;
 const getNick = () => (store.get("skyNick")||"").trim();
 function cleanNick(s){ return s.replace(/[^\p{L}\p{N} _\-.]/gu,"").replace(/\s+/g," ").trim().slice(0,16); }
 function newGame(){
   generate(strSeed("sky-shards:"+worldDay));
   for(const id of HOTBAR) inv[id]=0; inv[CLOUD]=20;
   clouds.clear(); found=0; falls=0; clock=0; dayT=.3; sel=0; mining=null; myRank=null;
+  clearBats(); batsKilled=0; finished=false; lastRun=null; $("sBats").textContent="0";
   P.x=spawn.x; P.y=spawn.y; P.z=spawn.z; P.vx=P.vy=P.vz=0; P.yaw=Math.PI*.25; P.pitch=-.12;
   safe.x=P.x; safe.y=P.y; safe.z=P.z;
   const d = new Date(worldDay+"T00:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"});
@@ -1014,12 +1192,34 @@ function win(){
   if(!isFinite(ba) || t<ba) store.set("skyBestAll", String(t));
   $("winTime").textContent = fmt(t);
   $("winText").textContent = ONLINE ? "Sending your time to the leaderboard…" : `Falls into the void: ${falls}. ${(!isFinite(bt)||t<bt) ? "That’s your best run on today’s world." : "Your best today: "+fmt(bt)+"."}`;
-  const url = ONLINE ? location.origin : "";
-  $("shareBtn").href = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(`I collected all ${totalShards} sky shards in ${fmt(t)} on today’s Sky Shards world. Beat me:`) + (url ? "&url="+encodeURIComponent(url) : "");
+  lastRun = {time:t, falls, bats:batsKilled, shards:found, total:totalShards, nick:getNick()||"you", rank:null};
+  updateShareLink();
   send({t:"finish", time:+t.toFixed(2), falls, shards:found});
   boardTab = "today"; renderBoards();
-  $("winScreen").hidden = false; sfx.win();
+  clearBats(); finished = true; P.pitch = .32; $("cardImg").removeAttribute("src");
+  launchFireworks(9); setTimeout(()=>{ snapWanted = true; }, 1500);
+  sfx.win(); drawCard(); toast("All shards collected!", "shard");
+  setTimeout(()=>{ if(finished) $("winScreen").hidden = false; }, 1600);
 }
+function updateShareLink(){
+  if(!lastRun) return;
+  const url = "https://" + SITE;
+  const rk = lastRun.rank ? ` and placed #${lastRun.rank} today` : "";
+  $("shareBtn").href = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(`I collected all ${lastRun.total} sky shards in ${fmt(lastRun.time)}${rk} on Sky Shards. Beat me:`) + (url ? "&url="+encodeURIComponent(url) : "");
+}
+$("copyBtn").addEventListener("click", async ()=>{
+  try{
+    const blob = new Promise(r=>cardCanvas.toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+    toast("Image copied. Paste it into your post", "shard");
+  }catch(e){ toast("Your browser blocked copying. Use Save image instead", "warn"); }
+});
+$("saveBtn").hidden = !ONLINE; // the claude.ai preview blocks downloads; the real site allows them
+$("saveBtn").addEventListener("click", ()=>{
+  const a = document.createElement("a"); a.href = cardCanvas.toDataURL("image/png");
+  a.download = `sky-shards-${worldDay}-${fmt(lastRun?lastRun.time:0).replace(/[:.]/g,"-")}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
 $("nick").value = getNick();
 $("joinForm").addEventListener("submit", e=>{ e.preventDefault(); start(); });
 $("resumeBtn").addEventListener("click", ()=>{ setPaused(false); tryLock(); });
@@ -1057,6 +1257,9 @@ function frame(now){
     clock += dt; dayT = (dayT + dt/DAY_LEN) % 1;
     const steps = Math.ceil(dt/.016); for(let i=0;i<steps;i++) physics(dt/steps);
     h = raycast();
+    const hn = Math.sin(dayT*Math.PI*2), night = Math.min(1, Math.max(0, (-hn+.15)/.5));
+    updateBats(dt, night);
+    if(input.mine){ const bt = batUnderCrosshair(); if(bt){ killBat(bt); mining = null; } }
     updateMining(dt, h);
     if(input.place){ placeCd -= dt; if(placeCd<=0){ place(); placeCd=.24; } }
     tickClouds();
@@ -1066,10 +1269,11 @@ function frame(now){
     if(NET.posT<=0){ NET.posT=.5; send({t:"pos", shards:found}); }
   } else {
     swinging = false; crackMesh.visible = false;
-    if(!running) P.yaw += dt*.06; // slow look-around behind menus
+    if(!running && !finished) P.yaw += dt*.06; // slow look-around behind menus
   }
   outline.visible = !!h; if(h) outline.position.set(h.x+.5,h.y+.5,h.z+.5);
-  updateParticles(dt); updateHand(dt);
+  updateParticles(dt); updateHand(dt); updateFireworks(dt);
+  shake = Math.max(0, shake-dt);
   for(const f of fluff){ f.position.x += dt*.6; if(f.position.x>120) f.position.x=-30; }
   for(const k of dirty){ const [a,b,c]=k.split(",").map(Number); buildChunk(a,b,c); } dirty.clear();
   eyeOff += ((keys.sneak&&running ? -.3 : 0) - eyeOff)*Math.min(1,dt*12);
@@ -1077,7 +1281,9 @@ function frame(now){
   camera.position.set(P.x, P.y+EYE+eyeOff + (running ? -Math.abs(Math.sin(walkPhase))*.05*bobAmt : 0), P.z);
   camera.rotation.y = P.yaw; camera.rotation.x = P.pitch;
   updateSky();
+  if(shake>0){ camera.position.x += (Math.random()-.5)*shake*.4; camera.position.y += (Math.random()-.5)*shake*.4; }
   renderer.clear(); renderer.render(scene, camera);
+  if(snapWanted){ snapWanted = false; takeSnap(); }
   if(running){ renderer.clearDepth(); renderer.render(handScene, handCam); }
   requestAnimationFrame(frame);
 }
