@@ -106,7 +106,8 @@ const server = http.createServer((req, res) => {
   }
   if (url.pathname === "/healthz") { res.writeHead(200); return res.end("ok"); }
   const file = path.normalize(path.join(PUBLIC, url.pathname));
-  if (!file.startsWith(PUBLIC) || path.basename(file) === "game.html") { res.writeHead(404); return res.end(); }
+  const PUBLIC_FILES = new Set(["og.png", "favicon.ico"]);
+  if (!file.startsWith(PUBLIC) || !PUBLIC_FILES.has(path.basename(file))) { res.writeHead(404); return res.end(); }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end("Not found"); }
     res.writeHead(200, { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream", "Cache-Control": "public, max-age=3600" });
@@ -124,7 +125,7 @@ function broadcast(obj) {
   for (const ws of wss.clients) if (ws.readyState === 1) ws.send(s);
 }
 wss.on("connection", ws => {
-  const p = { id: nextId++, nick: "guest", x: 0, y: 0, z: 0, yaw: 0, shards: 0, playing: false, startAt: 0, msgs: 0, alive: true };
+  const p = { id: nextId++, nick: "guest", shards: 0, playing: false, startAt: 0, msgs: 0, alive: true };
   players.set(ws, p);
   ws.send(JSON.stringify({ t: "welcome", id: p.id, day: today() }));
   ws.send(JSON.stringify({ t: "board", board: publicBoard() }));
@@ -138,9 +139,7 @@ wss.on("connection", ws => {
       if (!m.resume || !p.startAt) p.startAt = Date.now();
     }
     else if (m.t === "pos" && p.playing) {
-      const n = v => (typeof v === "number" && isFinite(v) ? Math.max(-50, Math.min(150, v)) : 0);
-      p.x = n(m.x); p.y = n(m.y); p.z = n(m.z); p.yaw = typeof m.yaw === "number" ? m.yaw : 0;
-      p.shards = Math.max(0, Math.min(99, m.shards | 0));
+      p.shards = Math.max(0, Math.min(99, m.shards | 0)); // positions are never shared: players stay invisible to each other
     }
     else if (m.t === "finish" && p.playing) {
       p.playing = false;
@@ -165,11 +164,11 @@ wss.on("connection", ws => {
   ws.on("close", () => players.delete(ws));
 });
 
-// 10 Hz presence broadcast + rate-limit reset
+// 1 Hz online list (names + shard counts only) + rate-limit reset
 setInterval(() => {
-  const list = [...players.values()].slice(0, 60).map(({ id, nick, x, y, z, yaw, shards, playing }) => ({ id, nick, x, y, z, yaw, shards, playing }));
+  const list = [...players.values()].slice(0, 60).map(({ id, nick, shards, playing }) => ({ id, nick, shards, playing }));
   broadcast({ t: "players", list });
-}, 100);
+}, 1000);
 setInterval(() => { for (const p of players.values()) p.msgs = 0; }, 1000);
 // drop dead sockets
 setInterval(() => {
