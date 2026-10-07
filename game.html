@@ -42,11 +42,19 @@ body{background:var(--night);color:var(--ink);font-family:var(--f-mono);user-sel
 .plist .sc{color:var(--shard);font-variant-numeric:tabular-nums}
 .sw{width:8px;height:8px;border-radius:2px;flex:none}
 
-#compass{top:calc(12px + env(safe-area-inset-top,0px));right:12px;display:flex;align-items:center;gap:10px}
-#arrow{width:34px;height:34px;display:grid;place-items:center}
-#arrow svg{width:30px;height:30px}
-#cmpText{font-size:11px;line-height:1.4;color:var(--muted);letter-spacing:.04em}
-#cmpText b{font-family:var(--f-display);font-size:16px;color:var(--shard);font-variant-numeric:tabular-nums;letter-spacing:0}
+#radarBox{top:calc(12px + env(safe-area-inset-top,0px));right:12px;display:grid;gap:6px;justify-items:center;padding:8px}
+#radar{width:150px;height:150px;display:block}
+#cmpText{font-size:11px;line-height:1.3;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:center}
+#cmpText b{font-family:var(--f-display);font-size:16px;color:var(--shard);font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none}
+#sneakTag{left:50%;top:calc(50% + 22px);transform:translateX(-50%);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.card.guide{max-width:780px;max-height:calc(100vh - 32px);overflow:auto;grid-template-columns:1fr;background:var(--panel-solid);align-self:center}
+.guide h3{margin:0;font-family:var(--f-display);font-size:20px;color:var(--shard);font-weight:600}
+.guide section{display:grid;gap:8px;align-content:start}
+.guide ul,.guide ol{margin:0;padding-left:20px;display:grid;gap:5px;font-size:13px;line-height:1.55;color:var(--muted);max-width:68ch}
+.guide li strong,.guide p strong{color:var(--ink);font-weight:500}
+.guide kbd{font-family:var(--f-display);color:var(--gold);font-size:13px}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px 24px;align-items:start}
+.card.guide{align-content:start;gap:20px;box-sizing:border-box}
 
 #cross{left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px}
 #cross::before,#cross::after{content:"";position:absolute;background:rgba(255,255,255,.9);mix-blend-mode:difference}
@@ -113,10 +121,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
 #tJump{right:24px;bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 #tMine{right:100px;bottom:calc(150px + env(safe-area-inset-bottom,0px))}
 #tPlace{right:24px;bottom:calc(172px + env(safe-area-inset-bottom,0px))}
+#tSneak{left:154px;bottom:calc(90px + env(safe-area-inset-bottom,0px))}
+#tSneak.on{background:rgba(255,210,122,.35)}
 @media (max-width:760px){ .card{grid-template-columns:1fr;padding:20px} }
 @media (max-width:520px){
   .slot{width:38px;height:38px}.slot canvas{width:24px;height:24px}
-  #left{width:150px} #cmpText{display:none} #online .plist{display:none}
+  #left{width:150px} #radar{width:110px;height:110px} #online .plist{display:none}
 }
 @media (prefers-reduced-motion:reduce){#toast,#fade{transition:none}}
 </style>
@@ -136,10 +146,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     <div class="plist" id="olList"></div>
   </div>
 </div>
-<div class="hud panel" id="compass">
-  <div id="arrow"><svg viewBox="0 0 30 30"><path d="M15 2 L24 24 L15 19 L6 24 Z" fill="#7ff3e4" stroke="#06202a" stroke-width="1.5"/></svg></div>
-  <div id="cmpText">nearest shard<br><b id="cmpDist">—</b> <span id="cmpY"></span></div>
+<div class="hud panel" id="radarBox">
+  <canvas id="radar" width="300" height="300" aria-label="Radar"></canvas>
+  <div id="cmpText">nearest shard <b id="cmpDist">—</b> <span id="cmpY"></span></div>
 </div>
+<div class="hud" id="sneakTag" hidden>sneaking · edge safe</div>
 <div class="hud" id="cross"></div>
 <div class="hud" id="toast"></div>
 <div class="hud" id="melt" hidden></div>
@@ -150,6 +161,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
   <div class="tbtn" id="tJump">jump</div>
   <div class="tbtn" id="tMine">mine</div>
   <div class="tbtn" id="tPlace">place</div>
+  <div class="tbtn" id="tSneak">sneak</div>
 </div>
 
 <div class="overlay" id="startScreen">
@@ -157,10 +169,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     <div class="col">
       <div class="eyebrow" id="worldLabel">Daily world</div>
       <h1>Sky <span>Shards</span></h1>
-      <p>Islands float over the void. Crystal shards hide on top of them and hang underneath. <strong>Collect every shard as fast as you can.</strong> Everyone gets the same islands today.</p>
+      <p>Islands float over the void. Crystal shards hide on top of them and hang underneath. <strong>Collect every shard as fast as you can.</strong> Everyone races the same islands today, each in their own copy of the world.</p>
       <p>Build bridges out of <strong>clouds</strong>. A cloud melts 20 seconds after you place it, so keep moving. Each shard gives <strong>+12 clouds</strong>. Fall into the void and you lose 4.</p>
       <div class="keys" id="keysDesk">
-        <kbd>WASD</kbd><span>move, Shift to sprint</span>
+        <kbd>WASD</kbd><span>move, double-tap W to sprint</span>
+        <kbd>Shift</kbd><span>sneak: you can’t walk off edges</span>
         <kbd>Space</kbd><span>jump</span>
         <kbd>Hold LMB</kbd><span>mine a block</span>
         <kbd>RMB</kbd><span>place a block</span>
@@ -169,6 +182,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       <form class="join" id="joinForm">
         <input id="nick" maxlength="16" placeholder="Your nickname" autocomplete="off" spellcheck="false" aria-label="Nickname">
         <button class="go" type="submit">Play</button>
+        <button class="ghostBtn" type="button" data-guide>How to play</button>
       </form>
       <div class="note" id="startNote"></div>
     </div>
@@ -181,8 +195,55 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
     <div class="col">
       <h2>Paused</h2>
       <p>The clock keeps running in online races, so hurry back.</p>
-      <div class="join"><button class="go" id="resumeBtn" type="button">Resume</button></div>
+      <div class="join"><button class="go" id="resumeBtn" type="button">Resume</button><button class="ghostBtn" type="button" data-guide>How to play</button></div>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="guideScreen" hidden>
+  <div class="card guide">
+    <div class="col">
+      <div class="eyebrow">Guide</div>
+      <h2>How to play Sky Shards</h2>
+      <p>Everyone online gets the same floating islands today. Your run starts on the big central island. The clock runs until you pick up the last crystal shard. Fastest time wins the day.</p>
+    </div>
+    <div class="ggrid">
+      <section><h3>Goal</h3><ul>
+        <li>Find and mine every <strong>crystal shard</strong>. The counter top-left shows how many are left.</li>
+        <li>Most islands have one shard on top. Big islands also have one <strong>hanging underneath</strong>, so look below.</li>
+        <li>Each shard gives <strong>+12 clouds</strong>.</li>
+      </ul></section>
+      <section><h3>Radar</h3><ul>
+        <li>The radar top-right is a map of the islands that turns with you. <strong>Up on the radar is where you’re looking.</strong></li>
+        <li>Cyan dots are shards. <strong>▲</strong> means it’s above you, <strong>▼</strong> below, a dot means about your level.</li>
+        <li>The pulsing ring marks the nearest shard. Shards beyond range sit on the edge of the radar.</li>
+      </ul></section>
+      <section><h3>Controls</h3><ul>
+        <li><kbd>WASD</kbd> move, <kbd>Space</kbd> jump, double-tap <kbd>W</kbd> to sprint.</li>
+        <li><kbd>Shift</kbd> sneak. While sneaking you <strong>can’t fall off an edge</strong>.</li>
+        <li><strong>Hold</strong> left mouse to mine. Stone and logs take longer than dirt, leaves and clouds.</li>
+        <li>Right mouse places the selected block. Hold it to place several.</li>
+        <li><kbd>1</kbd>–<kbd>7</kbd> or the mouse wheel pick a block. <kbd>M</kbd> mutes sound. <kbd>Esc</kbd> pauses.</li>
+      </ul></section>
+      <section><h3>Clouds and bridges</h3><ul>
+        <li>You start with <strong>20 clouds</strong>. They are the fastest way across the void.</li>
+        <li>A cloud <strong>melts 20 seconds</strong> after you place it. At 15 seconds it turns see-through as a warning.</li>
+        <li>Mining any block puts it in your hotbar, so dirt, stone and logs work as bridges that never melt.</li>
+        <li>Falling into the void returns you to the last island you stood on and costs 4 clouds.</li>
+      </ul></section>
+      <section><h3>How to bridge fast</h3><ol>
+        <li>Walk to the edge of the island and hold <kbd>Shift</kbd>.</li>
+        <li>Turn around so the void is behind you and look down at the side of the block you stand on.</li>
+        <li>Walk backwards with <kbd>S</kbd> and click right mouse to place a block each step. Sneaking keeps you from falling.</li>
+        <li>To go up, jump and place a block under your feet while in the air.</li>
+      </ol></section>
+      <section><h3>Leaderboard</h3><ul>
+        <li>Your nickname and time go to <strong>today</strong> and <strong>all time</strong> boards when you finish.</li>
+        <li>Only your best run counts. The world changes every day at 00:00 UTC (03:00 Kyiv).</li>
+        <li>Runs under 20 seconds or faster than real time are rejected.</li>
+      </ul></section>
+    </div>
+    <div class="join"><button class="go" type="button" id="guideClose">Got it</button></div>
   </div>
 </div>
 
@@ -416,6 +477,7 @@ function generate(seed){
     }
   });
   totalShards = crystals.length;
+  buildIslandMap();
   let sy = 40; while(sy>0 && get(48,sy,48)===AIR) sy--;
   spawn = {x:48.5, y:sy+1, z:48.5};
   for(const ms of chunks.values()){for(const m of ms){scene.remove(m);m.geometry.dispose()}}
@@ -578,18 +640,26 @@ function hits(px,py,pz){
   return false;
 }
 const underId = ()=> get(Math.floor(P.x),Math.floor(P.y-.05),Math.floor(P.z));
+// any block under the player's footprint? (used by sneak to stop you walking off edges)
+function supported(px,pz){
+  const y=Math.floor(P.y-.05), x0=Math.floor(px-HW+.001), x1=Math.floor(px+HW-.001), z0=Math.floor(pz-HW+.001), z1=Math.floor(pz+HW-.001);
+  for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++) if(get(x,y,z)) return true;
+  return false;
+}
+let eyeOff = 0;
 function physics(dt){
   const f = keys.f - keys.b, s = keys.r - keys.l;
   let mx = f*-Math.sin(P.yaw) + s*Math.cos(P.yaw), mz = f*-Math.cos(P.yaw) + s*-Math.sin(P.yaw);
   const len = Math.hypot(mx,mz); if(len>1){mx/=len;mz/=len}
-  const sp = keys.run ? 7.2 : 4.7;
+  const sp = keys.sneak ? 1.7 : keys.run ? 7.2 : 4.7;
   const acc = P.ground ? 14 : 4;
   P.vx += (mx*sp - P.vx)*Math.min(1,acc*dt);
   P.vz += (mz*sp - P.vz)*Math.min(1,acc*dt);
   P.vy -= 27*dt; if(P.vy<-40) P.vy=-40;
   if(keys.jump && P.ground){ P.vy = 8.6; P.ground=false; sfx.jump(); }
-  const nx = P.x + P.vx*dt; if(hits(nx,P.y,P.z)) P.vx=0; else P.x = nx;
-  const nz = P.z + P.vz*dt; if(hits(P.x,P.y,nz)) P.vz=0; else P.z = nz;
+  const guard = keys.sneak && P.ground;
+  const nx = P.x + P.vx*dt; if(hits(nx,P.y,P.z) || (guard && !supported(nx,P.z))) P.vx=0; else P.x = nx;
+  const nz = P.z + P.vz*dt; if(hits(P.x,P.y,nz) || (guard && !supported(P.x,nz))) P.vz=0; else P.z = nz;
   const wasGround = P.ground, vyBefore = P.vy;
   const ny = P.y + P.vy*dt; P.ground = false;
   if(hits(P.x,ny,P.z)){
@@ -721,15 +791,54 @@ function toast(msg, kind){
   t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove("on"), 2300);
 }
 const fmt = s => String(Math.floor(s/60)).padStart(2,"0")+":"+(s%60).toFixed(1).padStart(4,"0");
+/* radar: top-down island map that turns with the player, shards as markers */
+const radarEl = $("radar"), rctx = radarEl.getContext("2d");
+const islandMap = document.createElement("canvas"); islandMap.width = W; islandMap.height = D;
+function buildIslandMap(){
+  const m = islandMap.getContext("2d"), img = m.createImageData(W,D);
+  for(let z=0;z<D;z++)for(let x=0;x<W;x++){
+    let top=-1, id=0; for(let y=H-1;y>=0;y--){ const b=world[I(x,y,z)]; if(b && b!==CLOUD && b!==MELT && b!==CRYSTAL){ top=y; id=b; break; } }
+    const o=(z*W+x)*4; if(top<0){ img.data[o+3]=0; continue; }
+    const shade = .8 + .35*(top/H);
+    const c = id===SAND?[222,204,150]:id===LEAVES?[50,120,50]:id===LOG?[110,80,50]:id===STONE?[120,124,132]:[86,160,70];
+    img.data[o]=c[0]*shade; img.data[o+1]=c[1]*shade; img.data[o+2]=c[2]*shade; img.data[o+3]=255;
+  }
+  m.putImageData(img,0,0);
+}
+const RADAR_RANGE = 45;
 function updateCompass(){
+  const Wd = radarEl.width, c = Wd/2, R = c-8, sc = R/RADAR_RANGE, t = performance.now()/1000;
+  rctx.clearRect(0,0,Wd,Wd);
+  rctx.save(); rctx.beginPath(); rctx.arc(c,c,R+4,0,Math.PI*2); rctx.fillStyle="rgba(5,8,28,.82)"; rctx.fill(); rctx.clip();
+  rctx.save(); rctx.translate(c,c); rctx.rotate(P.yaw); rctx.scale(sc,sc); rctx.imageSmoothingEnabled=false;
+  rctx.drawImage(islandMap, -P.x, -P.z); rctx.restore();
+  rctx.strokeStyle="rgba(160,190,255,.18)"; rctx.lineWidth=2;
+  for(const k of [15,30]){ rctx.beginPath(); rctx.arc(c,c,k*sc,0,Math.PI*2); rctx.stroke(); }
+  rctx.restore();
+  rctx.beginPath(); rctx.arc(c,c,R+4,0,Math.PI*2); rctx.strokeStyle="rgba(160,190,255,.35)"; rctx.lineWidth=3; rctx.stroke();
   let best=null, bd=1e9;
-  for(const c of crystals){const d=Math.hypot(c.x+.5-P.x,c.y+.5-P.y,c.z+.5-P.z); if(d<bd){bd=d;best=c}}
-  if(!best){$("cmpDist").textContent="—";return}
-  const dx=best.x+.5-P.x, dz=best.z+.5-P.z, dy=best.y-(P.y+1);
-  const rel = Math.atan2(-dx,-dz) - P.yaw;
-  $("arrow").style.transform = `rotate(${-rel}rad)`;
+  for(const s of crystals){const d=Math.hypot(s.x+.5-P.x,s.y+.5-P.y,s.z+.5-P.z); if(d<bd){bd=d;best=s}}
+  const cs=Math.cos(P.yaw), sn=Math.sin(P.yaw);
+  for(const s of crystals){
+    const dx=s.x+.5-P.x, dz=s.z+.5-P.z, dy=s.y-(P.y+1);
+    let sx=(dx*cs - dz*sn)*sc, sy=(dx*sn + dz*cs)*sc;
+    const len=Math.hypot(sx,sy), far=len>R-6; if(far){ sx*=(R-6)/len; sy*=(R-6)/len; }
+    const x=c+sx, y=c+sy, r=far?7:10;
+    rctx.fillStyle = far ? "rgba(127,243,228,.55)" : "#7ff3e4"; rctx.strokeStyle="#06202a"; rctx.lineWidth=3;
+    rctx.beginPath();
+    if(dy>2){ rctx.moveTo(x,y-r); rctx.lineTo(x+r,y+r*.8); rctx.lineTo(x-r,y+r*.8); rctx.closePath(); }
+    else if(dy<-2){ rctx.moveTo(x,y+r); rctx.lineTo(x+r,y-r*.8); rctx.lineTo(x-r,y-r*.8); rctx.closePath(); }
+    else rctx.arc(x,y,r*.75,0,Math.PI*2);
+    rctx.stroke(); rctx.fill();
+    if(s===best){ rctx.beginPath(); rctx.arc(x,y,r+6+Math.sin(t*5)*3,0,Math.PI*2); rctx.strokeStyle="rgba(255,210,122,.9)"; rctx.lineWidth=3; rctx.stroke(); }
+  }
+  // the player, always pointing up
+  rctx.beginPath(); rctx.moveTo(c,c-12); rctx.lineTo(c+8,c+9); rctx.lineTo(c,c+4); rctx.lineTo(c-8,c+9); rctx.closePath();
+  rctx.fillStyle="#ffd27a"; rctx.strokeStyle="#06202a"; rctx.lineWidth=3; rctx.stroke(); rctx.fill();
+  if(!best){$("cmpDist").textContent="—"; $("cmpY").textContent=""; return}
+  const dyb=best.y-(P.y+1);
   $("cmpDist").textContent = Math.round(bd)+" m";
-  $("cmpY").textContent = dy>2?"above":dy<-2?"below":"";
+  $("cmpY").textContent = dyb>2?"▲ above":dyb<-2?"▼ below":"";
 }
 const hueOf = s => strSeed(s)%360;
 const colorOf = s => `hsl(${hueOf(s)} 75% 62%)`;
@@ -755,36 +864,6 @@ document.addEventListener("click", e=>{ const b = e.target.closest("[data-tab]")
 
 /* ---------- multiplayer ---------- */
 const NET = {ws:null, open:false, id:null, posT:0, retry:1000};
-const ghosts = new Map();
-function nameSprite(nick){
-  const c=document.createElement("canvas"); c.width=256; c.height=48; const x=c.getContext("2d");
-  x.font="600 26px 'Pixelify Sans', monospace"; const w=Math.min(250,x.measureText(nick).width+20);
-  x.fillStyle="rgba(5,8,25,.6)"; x.fillRect(128-w/2,4,w,40); x.fillStyle="#fff"; x.textAlign="center"; x.textBaseline="middle"; x.fillText(nick,128,25);
-  const t=new THREE.CanvasTexture(c); const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,depthWrite:false,transparent:true}));
-  s.scale.set(1.6,.3,1); s.position.y=2.2; return s;
-}
-function makeGhost(p){
-  const g = new THREE.Group(), col = new THREE.Color(`hsl(${hueOf(p.nick)}, 75%, 62%)`);
-  const m = new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:.55, depthWrite:false});
-  const body = new THREE.Mesh(new THREE.BoxGeometry(.56,1.25,.36), m); body.position.y=.63;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5), m); head.position.y=1.52;
-  g.add(body, head, nameSprite(p.nick)); scene.add(g);
-  return {g, head, tx:p.x, ty:p.y, tz:p.z, yaw:p.yaw||0, nick:p.nick};
-}
-function syncGhosts(list){
-  const seen = new Set();
-  for(const p of list){
-    if(p.id===NET.id || !p.playing) continue; seen.add(p.id);
-    let gh = ghosts.get(p.id);
-    if(!gh || gh.nick!==p.nick){ if(gh) scene.remove(gh.g); gh = makeGhost(p); gh.g.position.set(p.x,p.y,p.z); ghosts.set(p.id, gh); }
-    gh.tx=p.x; gh.ty=p.y; gh.tz=p.z; gh.yaw=p.yaw||0;
-  }
-  for(const [id,gh] of ghosts) if(!seen.has(id)){ scene.remove(gh.g); ghosts.delete(id); }
-}
-function updateGhosts(dt){
-  const k = Math.min(1, dt*10);
-  for(const gh of ghosts.values()){ const p=gh.g.position; p.x+=(gh.tx-p.x)*k; p.y+=(gh.ty-p.y)*k; p.z+=(gh.tz-p.z)*k; gh.g.rotation.y = gh.yaw; gh.g.visible = Math.hypot(p.x-P.x,p.z-P.z)>1.4 || Math.abs(p.y-P.y)>2; }
-}
 function renderOnline(list){
   $("olCount").textContent = `${list.length} online`;
   const racing = list.filter(p=>p.playing).sort((a,b)=>(b.shards||0)-(a.shards||0)).slice(0,5);
@@ -799,34 +878,37 @@ function connect(){
   ws.onmessage = e=>{
     let m; try{ m = JSON.parse(e.data); }catch(err){ return; }
     if(m.t==="welcome"){ NET.id = m.id; if(m.day && m.day!==worldDay && !running){ worldDay=m.day; newGame(); } }
-    else if(m.t==="players"){ renderOnline(m.list); syncGhosts(m.list); }
+    else if(m.t==="players"){ renderOnline(m.list); }
     else if(m.t==="board"){ lastBoard = m.board; renderBoards(); }
     else if(m.t==="result"){ myRank = m; showRank(); }
     else if(m.t==="error"){ toast(m.msg, "warn"); }
   };
-  ws.onclose = ()=>{ NET.open=false; $("online").hidden=true; for(const gh of ghosts.values()) scene.remove(gh.g); ghosts.clear(); setTimeout(connect, NET.retry); NET.retry=Math.min(15000, NET.retry*1.7); };
+  ws.onclose = ()=>{ NET.open=false; $("online").hidden=true; setTimeout(connect, NET.retry); NET.retry=Math.min(15000, NET.retry*1.7); };
 }
 
 /* ---------- input ---------- */
-const keys = {f:0,b:0,l:0,r:0,jump:false,run:false};
+const keys = {f:0,b:0,l:0,r:0,jump:false,run:false,sneak:false};
 const input = {mine:false, place:false};
 let running = false, paused = false, lockedOnce = false;
 const KEYMAP = {KeyW:"f",ArrowUp:"f",KeyS:"b",ArrowDown:"b",KeyA:"l",ArrowLeft:"l",KeyD:"r",ArrowRight:"r"};
 const typing = e => e.target && (e.target.tagName==="INPUT");
+let lastW = 0;
 addEventListener("keydown", e=>{
   if(typing(e)) return;
+  if((e.code==="KeyW"||e.code==="ArrowUp") && !e.repeat){ const n=performance.now(); if(n-lastW<300) keys.run=true; lastW=n; }
   if(KEYMAP[e.code]) keys[KEYMAP[e.code]]=1;
   if(e.code==="Space"){ keys.jump=true; e.preventDefault(); }
-  if(e.code==="ShiftLeft"||e.code==="ShiftRight") keys.run=true;
+  if(e.code==="ShiftLeft"||e.code==="ShiftRight"){ keys.sneak=true; keys.run=false; }
   if(/^Digit[1-7]$/.test(e.code)) selectSlot(+e.code.slice(5)-1);
   if(e.code==="KeyM") setMuted(!S.muted);
 });
 addEventListener("keyup", e=>{
   if(KEYMAP[e.code]) keys[KEYMAP[e.code]]=0;
   if(e.code==="Space") keys.jump=false;
-  if(e.code==="ShiftLeft"||e.code==="ShiftRight") keys.run=false;
+  if(e.code==="ShiftLeft"||e.code==="ShiftRight") keys.sneak=false;
+  if(e.code==="KeyW"||e.code==="ArrowUp") keys.run=false;
 });
-addEventListener("blur", ()=>{ keys.f=keys.b=keys.l=keys.r=0; keys.jump=keys.run=false; input.mine=input.place=false; });
+addEventListener("blur", ()=>{ keys.f=keys.b=keys.l=keys.r=0; keys.jump=keys.run=keys.sneak=false; input.mine=input.place=false; });
 addEventListener("wheel", e=>{ if(!running) return; selectSlot((sel+(e.deltaY>0?1:-1)+HOTBAR.length)%HOTBAR.length); }, {passive:true});
 addEventListener("contextmenu", e=>{ if(!typing(e)) e.preventDefault(); });
 const look = (dx,dy,k)=>{ P.yaw -= dx*k; P.pitch = Math.max(-1.55, Math.min(1.55, P.pitch - dy*k)); };
@@ -880,6 +962,7 @@ if(isTouch){
   btn("tJump", ()=>keys.jump=true, ()=>keys.jump=false);
   btn("tMine", ()=>input.mine=true, ()=>input.mine=false);
   btn("tPlace", ()=>{input.place=true; placeCd=0}, ()=>input.place=false);
+  btn("tSneak", ()=>{ keys.sneak=!keys.sneak; $("tSneak").classList.toggle("on", keys.sneak); });
 }
 
 /* ---------- game flow ---------- */
@@ -905,7 +988,7 @@ function start(){
   $("startScreen").hidden = true; $("winScreen").hidden = true;
   running = true; tryLock(); audio(); startWind(); sfx.click(); equipT = 1;
   send({t:"hello", nick:n}); send({t:"start", nick:n});
-  toast(`Collect ${totalShards} shards. The arrow points to the nearest one`);
+  toast(`Collect ${totalShards} shards. The radar shows where they are`);
 }
 function showRank(){
   if(!myRank) return;
@@ -930,6 +1013,8 @@ $("joinForm").addEventListener("submit", e=>{ e.preventDefault(); start(); });
 $("resumeBtn").addEventListener("click", ()=>{ setPaused(false); tryLock(); });
 $("againBtn").addEventListener("click", ()=>{ newGame(); start(); });
 $("soundBtn").addEventListener("click", ()=>{ setMuted(!S.muted); audio(); });
+document.querySelectorAll("[data-guide]").forEach(b=>b.addEventListener("click", ()=>{ $("guideScreen").hidden=false; }));
+$("guideClose").addEventListener("click", ()=>{ $("guideScreen").hidden=true; });
 setMuted(S.muted);
 
 /* ---------- sky ---------- */
@@ -966,16 +1051,18 @@ function frame(now){
     $("sTime").textContent = fmt(clock);
     updateCompass();
     NET.posT -= dt;
-    if(NET.posT<=0){ NET.posT=.1; send({t:"pos", x:+P.x.toFixed(2), y:+P.y.toFixed(2), z:+P.z.toFixed(2), yaw:+P.yaw.toFixed(2), shards:found}); }
+    if(NET.posT<=0){ NET.posT=.5; send({t:"pos", shards:found}); }
   } else {
     swinging = false; crackMesh.visible = false;
     if(!running) P.yaw += dt*.06; // slow look-around behind menus
   }
   outline.visible = !!h; if(h) outline.position.set(h.x+.5,h.y+.5,h.z+.5);
-  updateParticles(dt); updateHand(dt); updateGhosts(dt);
+  updateParticles(dt); updateHand(dt);
   for(const f of fluff){ f.position.x += dt*.6; if(f.position.x>120) f.position.x=-30; }
   for(const k of dirty){ const [a,b,c]=k.split(",").map(Number); buildChunk(a,b,c); } dirty.clear();
-  camera.position.set(P.x, P.y+EYE + (running ? -Math.abs(Math.sin(walkPhase))*.05*bobAmt : 0), P.z);
+  eyeOff += ((keys.sneak&&running ? -.3 : 0) - eyeOff)*Math.min(1,dt*12);
+  $("sneakTag").hidden = !(keys.sneak && running);
+  camera.position.set(P.x, P.y+EYE+eyeOff + (running ? -Math.abs(Math.sin(walkPhase))*.05*bobAmt : 0), P.z);
   camera.rotation.y = P.yaw; camera.rotation.x = P.pitch;
   updateSky();
   renderer.clear(); renderer.render(scene, camera);
