@@ -239,7 +239,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
       </ol></section>
       <section><h3>Leaderboard</h3><ul>
         <li>Your nickname and time go to <strong>today</strong> and <strong>all time</strong> boards when you finish.</li>
-        <li>Only your best run counts. The world changes every day at 00:00 UTC (03:00 Kyiv).</li>
+        <li>Only your best run counts. The world changes every day at <span id="resetTime">8 PM New York / 5 PM Los Angeles</span>.</li>
         <li>Runs under 20 seconds or faster than real time are rejected.</li>
       </ul></section>
     </div>
@@ -976,9 +976,21 @@ function newGame(){
   P.x=spawn.x; P.y=spawn.y; P.z=spawn.z; P.vx=P.vy=P.vz=0; P.yaw=Math.PI*.25; P.pitch=-.12;
   safe.x=P.x; safe.y=P.y; safe.z=P.z;
   const d = new Date(worldDay+"T00:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",timeZone:"UTC"});
-  $("worldLabel").textContent = `Daily world · ${d}`;
+  worldDate = d; updateResetInfo();
   renderBar();
 }
+let worldDate = "";
+function nextResetUTC(){ const n=new Date(); return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()+1); }
+function updateResetInfo(){
+  const at = nextResetUTC(), left = Math.max(0, at-Date.now());
+  const h = Math.floor(left/3600000), m = Math.floor(left%3600000/60000);
+  $("worldLabel").textContent = `Daily world · ${worldDate} · new world in ${h}h ${String(m).padStart(2,"0")}m`;
+  try{
+    const t = tz => new Date(at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:tz}).replace(":00","");
+    $("resetTime").textContent = `${t("America/New_York")} New York / ${t("America/Los_Angeles")} Los Angeles`;
+  }catch(e){}
+}
+setInterval(updateResetInfo, 30000);
 function setPaused(v){ paused = v; $("pauseScreen").hidden = !v; }
 function start(){
   let n = cleanNick($("nick").value);
