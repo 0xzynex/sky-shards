@@ -182,7 +182,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <kbd>Shift</kbd><span>sneak: you can’t walk off edges</span>
         <kbd>Space</kbd><span>jump</span>
         <kbd>Hold LMB</kbd><span>mine a block</span>
-        <kbd>RMB</kbd><span>place a block</span>
+        <kbd>RMB</kbd><span>place a block · over the void, hold it and walk to build a bridge</span>
         <kbd>1–7, wheel</kbd><span>pick a block · M toggles sound</span>
       </div>
       <form class="join" id="joinForm">
@@ -238,10 +238,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offse
         <li>Falling into the void returns you to the last island you stood on and costs 4 clouds.</li>
       </ul></section>
       <section><h3>How to bridge fast</h3><ol>
-        <li>Walk to the edge of the island and hold <kbd>Shift</kbd>.</li>
-        <li>Turn around so the void is behind you and look down at the side of the block you stand on.</li>
-        <li>Walk backwards with <kbd>S</kbd> and click right mouse to place a block each step. Sneaking keeps you from falling.</li>
+        <li>Pick clouds (<kbd>1</kbd>) and walk to the edge of the island.</li>
+        <li>Look straight ahead over the void. A <strong>cyan outline</strong> shows where the next block goes.</li>
+        <li><strong>Hold right mouse and walk forward</strong> with <kbd>W</kbd>. A block appears ahead of you every step.</li>
         <li>To go up, jump and place a block under your feet while in the air.</li>
+        <li>Careful players hold <kbd>Shift</kbd> at the edge so they can’t slip off.</li>
       </ol></section>
       <section><h3>Bats</h3><ul>
         <li>Bats circle the islands, and there are <strong>more at night</strong>.</li>
@@ -914,9 +915,29 @@ function updateMining(dt, h){
   crackMesh.visible = true; crackMesh.position.set(h.x+.5,h.y+.5,h.z+.5);
   crackMesh.material = crackMats[Math.min(9, Math.floor(mining.p*10))];
 }
+// Bridge assist: looking ahead over the void (or at something far away) extends the floor
+// you stand on in the direction you look, so holding right mouse while walking builds a bridge.
+function assistCell(){
+  if(P.pitch > .45) return null;
+  const fx=-Math.sin(P.yaw), fz=-Math.cos(P.yaw), y=Math.floor(P.y+.01)-1;
+  for(let d=.4; d<=3.2; d+=.2){
+    const x=Math.floor(P.x+fx*d), z=Math.floor(P.z+fz*d);
+    if(get(x,y,z)) continue;
+    for(let ox=-1;ox<=1;ox++) for(let oz=-1;oz<=1;oz++) if((ox||oz) && get(x+ox,y,z+oz)) return {x,y,z};
+    if(get(x,y-1,z)) return {x,y,z};
+    return null;
+  }
+  return null;
+}
+function placeTarget(h){
+  h = h===undefined ? raycast() : h;
+  const far = h && Math.hypot(h.x+.5-P.x, h.y+.5-(P.y+EYE), h.z+.5-P.z) > 3.4;
+  if(!h || far){ const a = assistCell(); if(a) return a; }
+  return h ? {x:h.x+h.n[0], y:h.y+h.n[1], z:h.z+h.n[2]} : null;
+}
 function place(){
-  const h = raycast(); if(!h) return;
-  const x=h.x+h.n[0], y=h.y+h.n[1], z=h.z+h.n[2];
+  const tgt = placeTarget(); if(!tgt) return;
+  const {x,y,z} = tgt;
   const id = HOTBAR[sel];
   if(!inB(x,y,z) || get(x,y,z)) return;
   if(!inv[id]){ sfx.deny(); toast(id===CLOUD?"Out of clouds. Find a shard or mine blocks":"No "+NAMES[id]+" left", "warn"); return; }
@@ -1261,7 +1282,7 @@ function frame(now){
     updateBats(dt, night);
     if(input.mine){ const bt = batUnderCrosshair(); if(bt){ killBat(bt); mining = null; } }
     updateMining(dt, h);
-    if(input.place){ placeCd -= dt; if(placeCd<=0){ place(); placeCd=.24; } }
+    if(input.place){ placeCd -= dt; if(placeCd<=0){ place(); placeCd=.17; } }
     tickClouds();
     $("sTime").textContent = fmt(clock);
     updateCompass();
@@ -1271,7 +1292,10 @@ function frame(now){
     swinging = false; crackMesh.visible = false;
     if(!running && !finished) P.yaw += dt*.06; // slow look-around behind menus
   }
-  outline.visible = !!h; if(h) outline.position.set(h.x+.5,h.y+.5,h.z+.5);
+  let ghost = null;
+  if(running && !paused && HOTBAR[sel] && (!h || Math.hypot(h.x+.5-P.x,h.y+.5-(P.y+EYE),h.z+.5-P.z)>3.4)) ghost = assistCell();
+  if(ghost){ outline.visible = true; outline.position.set(ghost.x+.5,ghost.y+.5,ghost.z+.5); outline.material.color.setHex(0x7ff3e4); outline.material.opacity = .9; }
+  else { outline.visible = !!h; outline.material.color.setHex(0x000000); outline.material.opacity = .5; if(h) outline.position.set(h.x+.5,h.y+.5,h.z+.5); }
   updateParticles(dt); updateHand(dt); updateFireworks(dt);
   shake = Math.max(0, shake-dt);
   for(const f of fluff){ f.position.x += dt*.6; if(f.position.x>120) f.position.x=-30; }
